@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Microsoft.OpenApi.Models;
 using MinimalApiSample.Data;
 using MinimalApiSample.Models;
 using MiniValidation;
@@ -26,6 +27,12 @@ builder.Services.AddIdentityEntityFrameworkContextConfiguration(options =>
 
 builder.Services.AddIdentityConfiguration();
 builder.Services.AddJwtConfiguration(builder.Configuration, "AppSettings");
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("RemoveSupplier", 
+        policy => policy.RequireClaim("RemoveSupplier"));
+});
 
 var app = builder.Build();
 
@@ -78,7 +85,7 @@ app.MapPost("/register", [AllowAnonymous] async (
     .WithName("RegisterUser")
     .WithTags("User");
 
-app.MapPost("login", async (
+app.MapPost("login", [AllowAnonymous] async (
     SignInManager<IdentityUser> signInManager,
     UserManager<IdentityUser> userManager,
     IOptions<AppJwtSettings> jwtSettings,
@@ -115,12 +122,12 @@ app.MapPost("login", async (
     .WithName("Login")
     .WithTags("User");
 
-app.MapGet("/supplier", async (ApplicationContext context) =>
+app.MapGet("/supplier", [AllowAnonymous] async (ApplicationContext context) =>
     await context.Suppliers.ToListAsync())
     .WithName("ListSuppliers")
     .WithTags("Supplier");
 
-app.MapGet("supplier/{id}", async (Guid id, ApplicationContext context) =>
+app.MapGet("supplier/{id}", [Authorize] async (Guid id, ApplicationContext context) =>
     await context.Suppliers.FindAsync(id)
         is Supplier supplier
             ? Results.Ok(supplier)
@@ -130,7 +137,7 @@ app.MapGet("supplier/{id}", async (Guid id, ApplicationContext context) =>
     .WithName("GetSupplier")
     .WithTags("Supplier");
 
-app.MapPost("/supplier", async (ApplicationContext context, 
+app.MapPost("/supplier", [Authorize] async (ApplicationContext context, 
     [FromBody] Supplier model) =>
     {
         if (!MiniValidator.TryValidate(model, out var errors))
@@ -149,7 +156,7 @@ app.MapPost("/supplier", async (ApplicationContext context,
     .WithName("InsertSupplier")
     .WithTags("Supplier");
 
-app.MapPut("supplier/{id}", async (
+app.MapPut("supplier/{id}", [Authorize] async (
     ApplicationContext context,
     Guid id, [FromBody] Supplier model) =>
 {
@@ -176,7 +183,7 @@ app.MapPut("supplier/{id}", async (
 .WithName("EditSupplier")
 .WithTags("Supplier");
 
-app.MapDelete("supplier/{id}", async (Guid id, ApplicationContext context) =>
+app.MapDelete("supplier/{id}", [Authorize] async (Guid id, ApplicationContext context) =>
 {
     if (await context.Suppliers.FindAsync(id) is Supplier supplier)
     {
@@ -193,6 +200,7 @@ app.MapDelete("supplier/{id}", async (Guid id, ApplicationContext context) =>
 .Produces(StatusCodes.Status404NotFound)
 .Produces(StatusCodes.Status204NoContent)
 .Produces(StatusCodes.Status400BadRequest)
+.RequireAuthorization("RemoveSupplier")
 .WithName("RemoveSupplier")
 .WithTags("Supplier");
 
