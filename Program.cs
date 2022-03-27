@@ -96,7 +96,7 @@ void MapEndpoints(WebApplication app)
         RegisterUser registerUser) =>
     {
         if (registerUser is null)
-            return Results.BadRequest("Usuário não informado.");
+            return Results.BadRequest("User information is required.");
 
         if (!MiniValidator.TryValidate(registerUser, out var errors))
             return Results.ValidationProblem(errors);
@@ -137,7 +137,7 @@ void MapEndpoints(WebApplication app)
         LoginUser user) =>
     {
         if (user is null)
-            return Results.BadRequest("Usuário não informado.");
+            return Results.BadRequest("User information is required.");
 
         if (!MiniValidator.TryValidate(user, out var errors))
             return Results.ValidationProblem(errors);
@@ -145,10 +145,10 @@ void MapEndpoints(WebApplication app)
         var result = await signInManager.PasswordSignInAsync(user.Email, user.Password, true, true);
 
         if (result.IsLockedOut)
-            return Results.BadRequest("Usuário bloqueado.");
+            return Results.BadRequest("User is blocked.");
 
         if (!result.Succeeded)
-            return Results.BadRequest("Usuário ou senha inválidos.");
+            return Results.BadRequest("Invalid user or password.");
 
         var jwt = new JwtBuilder()
             .WithUserManager(userManager)
