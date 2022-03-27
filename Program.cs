@@ -13,6 +13,7 @@ using NetDevPack.Identity.Model;
 
 var builder = WebApplication.CreateBuilder(args);
 
+#region Configure Services
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
 builder.Services.AddDbContext<ApplicationContext>(options =>
@@ -69,7 +70,9 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 var app = builder.Build();
+#endregion
 
+#region Configure Pipeline
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -78,11 +81,19 @@ if (app.Environment.IsDevelopment())
 app.UseAuthConfiguration();
 app.UseHttpsRedirection();
 
-app.MapPost("/register", [AllowAnonymous] async (
-    SignInManager<IdentityUser> signInManager,
-    UserManager<IdentityUser> userManager,
-    IOptions<AppJwtSettings> jwtSettings,
-    RegisterUser registerUser) =>
+MapEndpoints(app);
+
+app.Run();
+#endregion
+
+#region Endpoints
+void MapEndpoints(WebApplication app)
+{
+    app.MapPost("/register", [AllowAnonymous] async (
+        SignInManager<IdentityUser> signInManager, 
+        UserManager<IdentityUser> userManager, 
+        IOptions<AppJwtSettings> jwtSettings, 
+        RegisterUser registerUser) =>
     {
         if (registerUser is null)
             return Results.BadRequest("Usuário não informado.");
@@ -119,60 +130,60 @@ app.MapPost("/register", [AllowAnonymous] async (
     .WithName("RegisterUser")
     .WithTags("User");
 
-app.MapPost("login", [AllowAnonymous] async (
-    SignInManager<IdentityUser> signInManager,
-    UserManager<IdentityUser> userManager,
-    IOptions<AppJwtSettings> jwtSettings,
-    LoginUser user) =>
-{
-    if (user is null)
-        return Results.BadRequest("Usuário não informado.");
+    app.MapPost("login", [AllowAnonymous] async (
+        SignInManager<IdentityUser> signInManager,
+        UserManager<IdentityUser> userManager,
+        IOptions<AppJwtSettings> jwtSettings,
+        LoginUser user) =>
+    {
+        if (user is null)
+            return Results.BadRequest("Usuário não informado.");
 
-    if (!MiniValidator.TryValidate(user, out var errors))
-        return Results.ValidationProblem(errors);
+        if (!MiniValidator.TryValidate(user, out var errors))
+            return Results.ValidationProblem(errors);
 
-    var result = await signInManager.PasswordSignInAsync(user.Email, user.Password, true, true);
+        var result = await signInManager.PasswordSignInAsync(user.Email, user.Password, true, true);
 
-    if (result.IsLockedOut)
-        return Results.BadRequest("Usuário bloqueado.");
+        if (result.IsLockedOut)
+            return Results.BadRequest("Usuário bloqueado.");
 
-    if (!result.Succeeded)
-        return Results.BadRequest("Usuário ou senha inválidos.");
+        if (!result.Succeeded)
+            return Results.BadRequest("Usuário ou senha inválidos.");
 
-    var jwt = new JwtBuilder()
-        .WithUserManager(userManager)
-        .WithJwtSettings(jwtSettings.Value)
-        .WithEmail(user.Email)
-        .WithJwtClaims()
-        .WithUserClaims()
-        .WithUserRoles()
-        .BuildUserResponse();
+        var jwt = new JwtBuilder()
+            .WithUserManager(userManager)
+            .WithJwtSettings(jwtSettings.Value)
+            .WithEmail(user.Email)
+            .WithJwtClaims()
+            .WithUserClaims()
+            .WithUserRoles()
+            .BuildUserResponse();
 
-    return Results.Ok(jwt);
-})
+        return Results.Ok(jwt);
+    })
     .ProducesValidationProblem()
     .Produces(StatusCodes.Status400BadRequest)
     .Produces(StatusCodes.Status200OK)
     .WithName("Login")
     .WithTags("User");
 
-app.MapGet("/supplier", [AllowAnonymous] async (ApplicationContext context) =>
-    await context.Suppliers.ToListAsync())
-    .WithName("ListSuppliers")
-    .WithTags("Supplier");
+    app.MapGet("/supplier", [AllowAnonymous] async (ApplicationContext context) =>
+        await context.Suppliers.ToListAsync())
+        .WithName("ListSuppliers")
+        .WithTags("Supplier");
 
-app.MapGet("supplier/{id}", [Authorize] async (Guid id, ApplicationContext context) =>
-    await context.Suppliers.FindAsync(id)
-        is Supplier supplier
-            ? Results.Ok(supplier)
-            : Results.NotFound())
-    .Produces<Supplier>(StatusCodes.Status200OK)
-    .Produces(StatusCodes.Status404NotFound)
-    .WithName("GetSupplier")
-    .WithTags("Supplier");
+    app.MapGet("supplier/{id}", [Authorize] async (Guid id, ApplicationContext context) =>
+        await context.Suppliers.FindAsync(id)
+            is Supplier supplier
+                ? Results.Ok(supplier)
+                : Results.NotFound())
+        .Produces<Supplier>(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status404NotFound)
+        .WithName("GetSupplier")
+        .WithTags("Supplier");
 
-app.MapPost("/supplier", [Authorize] async (ApplicationContext context, 
-    [FromBody] Supplier model) =>
+    app.MapPost("/supplier", [Authorize] async (ApplicationContext context,
+        [FromBody] Supplier model) =>
     {
         if (!MiniValidator.TryValidate(model, out var errors))
             return Results.ValidationProblem(errors);
@@ -190,52 +201,52 @@ app.MapPost("/supplier", [Authorize] async (ApplicationContext context,
     .WithName("InsertSupplier")
     .WithTags("Supplier");
 
-app.MapPut("supplier/{id}", [Authorize] async (
-    ApplicationContext context,
-    Guid id, [FromBody] Supplier model) =>
-{
-    var supplier = await context.Suppliers
-        .AsNoTracking<Supplier>()
-        .FirstOrDefaultAsync(f => f.Id.Equals(id));
-
-    if (supplier is null)
-        return Results.NotFound();
-
-    if (!MiniValidator.TryValidate(model, out var errors))
-        return Results.ValidationProblem(errors);
-
-    context.Suppliers.Update(model);
-    var saved = await context.SaveChangesAsync() > 0;
-
-    return saved
-        ? Results.NoContent()
-        : Results.BadRequest("There was an error editing supplier.");
-})
-.ProducesValidationProblem()
-.Produces<Supplier>(StatusCodes.Status204NoContent)
-.Produces(StatusCodes.Status400BadRequest)
-.WithName("EditSupplier")
-.WithTags("Supplier");
-
-app.MapDelete("supplier/{id}", [Authorize] async (Guid id, ApplicationContext context) =>
-{
-    if (await context.Suppliers.FindAsync(id) is Supplier supplier)
+    app.MapPut("supplier/{id}", [Authorize] async (
+        ApplicationContext context,
+        Guid id, [FromBody] Supplier model) =>
     {
-        context.Suppliers.Remove(supplier);
-        var removed = await context.SaveChangesAsync() > 0;
+        var supplier = await context.Suppliers
+            .AsNoTracking<Supplier>()
+            .FirstOrDefaultAsync(f => f.Id.Equals(id));
 
-        return removed
+        if (supplier is null)
+            return Results.NotFound();
+
+        if (!MiniValidator.TryValidate(model, out var errors))
+            return Results.ValidationProblem(errors);
+
+        context.Suppliers.Update(model);
+        var saved = await context.SaveChangesAsync() > 0;
+
+        return saved
             ? Results.NoContent()
-            : Results.BadRequest("There was an error removing supplier.");
-    }
+            : Results.BadRequest("There was an error editing supplier.");
+    })
+    .ProducesValidationProblem()
+    .Produces<Supplier>(StatusCodes.Status204NoContent)
+    .Produces(StatusCodes.Status400BadRequest)
+    .WithName("EditSupplier")
+    .WithTags("Supplier");
 
-    return Results.NotFound();
-})
-.Produces(StatusCodes.Status404NotFound)
-.Produces(StatusCodes.Status204NoContent)
-.Produces(StatusCodes.Status400BadRequest)
-.RequireAuthorization("RemoveSupplier")
-.WithName("RemoveSupplier")
-.WithTags("Supplier");
+    app.MapDelete("supplier/{id}", [Authorize] async (Guid id, ApplicationContext context) =>
+    {
+        if (await context.Suppliers.FindAsync(id) is Supplier supplier)
+        {
+            context.Suppliers.Remove(supplier);
+            var removed = await context.SaveChangesAsync() > 0;
 
-app.Run();
+            return removed
+                ? Results.NoContent()
+                : Results.BadRequest("There was an error removing supplier.");
+        }
+
+        return Results.NotFound();
+    })
+    .Produces(StatusCodes.Status404NotFound)
+    .Produces(StatusCodes.Status204NoContent)
+    .Produces(StatusCodes.Status400BadRequest)
+    .RequireAuthorization("RemoveSupplier")
+    .WithName("RemoveSupplier")
+    .WithTags("Supplier");
+}
+#endregion
